@@ -406,7 +406,7 @@ if games_tracked.empty:
 
 def game_label_row(r):
     date = r.get("gameDate", "")
-    return f"{int(r['gameId'])} — {date} — {r['visitorTeamAbbr']} @ {r['homeTeamAbbr']}"
+    return f"{date}: {r['visitorTeamAbbr']} @ {r['homeTeamAbbr']} ({int(r['gameId'])})"
 
 games_tracked["label"] = games_tracked.apply(game_label_row, axis=1)
 labels_sorted = games_tracked["label"].sort_values().tolist()
@@ -432,8 +432,8 @@ if game_plays.empty:
     st.stop()
 
 def short_desc(row):
-    d = f"{int(row['playId'])} — {int(row.get('down',0))} & {int(row.get('yardsToGo',0))} — {row.get('gameClock','')}"
-    txt = str(row.get('playDescription',''))[:110].replace("\n"," ")
+    d = f"{int(row.get('down',0))} & {int(row.get('yardsToGo',0))} — {row.get('gameClock','')}"
+    txt = str(row.get('playDescription',''))[:110].replace("\n"," asdfasdfa")
     return f"{d} — {txt}"
 
 game_plays["label"] = game_plays.apply(short_desc, axis=1)
@@ -471,7 +471,6 @@ if st.sidebar.button("Render animation", type="primary"):
         if fig.layout.updatemenus and len(fig.layout.updatemenus) > 0:
             btn = fig.layout.updatemenus[0].buttons[0]
             btn.args[1]["frame"]["duration"] = fr_duration
-            # redraw not needed with SVG  # ensure redraw on play
 
         st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False})
 
