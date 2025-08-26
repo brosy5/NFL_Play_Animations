@@ -1,9 +1,9 @@
-# Play Animation Viewer (Streamlit) — optimized (redraw fix)
-# ----------------------------------------------------------
-# Implements: tracked-only dropdowns, true field aspect, field lines,
-# webgl markers, vectorized hovers/colors, cached data + figures,
-# Parquet-backed loading, deep links, and robust guards.
-# NOTE: For Scattergl animations, we set frame['redraw']=True.
+
+# Play Animation Viewer (Streamlit) — no coverage version
+# -------------------------------------------------------
+# Simplified to remove all player coverage logic & UI.
+# Keeps: tracked-only dropdowns, true field aspect, field lines,
+# Parquet-backed cached loading, deep links, and robust guards.
 
 import streamlit as st
 import pandas as pd
@@ -11,7 +11,7 @@ import numpy as np
 import plotly.graph_objects as go
 from pathlib import Path
 
-st.set_page_config(page_title="NFL Play Animation Viewer", layout="wide")
+st.set_page_config(page_title="NFL Play Animation Viewer (No Coverage)", layout="wide")
 
 # ------------------------------
 # Team colors & helpers
@@ -53,20 +53,6 @@ colors = {
     'football':["#CBB67C","#663831"]
 }
 
-def get_coverage_colors():
-    coverage_colors = {
-        'MAN': '#FF0000',
-        '2R': '#000080', '2L': '#000080',
-        '3R': '#0000FF', '3M': '#0000FF', '3L': '#0000FF',
-        '4OR': '#4169E1', '4OL': '#4169E1', '4IR': '#4169E1', '4IL': '#4169E1',
-        'FR': '#006400', 'FL': '#006400',
-        'HCR': '#228B22', 'HCL': '#228B22',
-        'CFR': '#32CD32', 'CFL': '#32CD32',
-        'HOL': '#800080', 'DF': '#8A2BE2', 'PRE': '#9370DB'
-    }
-    man_zone_colors = {'Man': '#1df00a', 'Zone': '#f00a19', None: '#0af047'}
-    return coverage_colors, man_zone_colors
-
 def ColorDistance(hex1,hex2):
     if hex1 == hex2:
         return 0
@@ -87,10 +73,10 @@ def ColorPairs(team1,team2):
         return {team1:[c1[0],c1[1]], team2:[c2[0],c2[1]], 'football':colors['football']}
 
 # ------------------------------
-# Animation builder (optimized)
+# Animation builder (coverage-free)
 # ------------------------------
 
-def animate_play(games, tracking_df, play_df, players, gameId, playId, play_speed='regular', viz_type='original'):
+def animate_play(games, tracking_df, play_df, players, gameId, playId, play_speed='regular'):
     selected_game_df = games.loc[games['gameId']==gameId].copy()
     selected_play_df = play_df.loc[(play_df['playId']==playId) & (play_df['gameId']==gameId)].copy()
     selected_tracking_df = tracking_df.loc[(tracking_df['playId']==playId)&(tracking_df['gameId']==gameId)].copy()
@@ -110,12 +96,8 @@ def animate_play(games, tracking_df, play_df, players, gameId, playId, play_spee
         team_combos = [selected_game_df['homeTeamAbbr'].iloc[0], selected_game_df['visitorTeamAbbr'].iloc[0]]
     color_orders = ColorPairs(team_combos[0],team_combos[1])
 
-    possession_team = selected_play_df['possessionTeam'].iloc[0]
-    defensive_team = selected_play_df['defensiveTeam'].iloc[0]
-
     # Yard markers
     line_of_scrimmage = float(selected_play_df['absoluteYardlineNumber'].iloc[0])
-    # Safe play direction
     if 'playDirection' in selected_tracking_df.columns and selected_tracking_df['playDirection'].notna().any():
         play_dir = str(selected_tracking_df['playDirection'].dropna().iloc[0])
     else:
@@ -129,21 +111,15 @@ def animate_play(games, tracking_df, play_df, players, gameId, playId, play_spee
     quarter = selected_play_df.get('quarter', pd.Series([None])).iloc[0]
     gameClock = selected_play_df.get('gameClock', pd.Series([''])).iloc[0]
 
-    # Button speed (we'll override later from UI as needed)
-    if play_speed == 'slow':
-        fr_duration = 135
-    elif play_speed == 'fast':
-        fr_duration = 65
-    else:
-        fr_duration = 100
+    # Button speed
+    fr_duration = {"fast":65, "regular":100, "slow":135}.get(play_speed, 100)
 
-    # IMPORTANT: redraw=True for Scattergl
     updatemenus_dict = [{
         "buttons": [
-            {"args": [None, {"frame": {"duration": fr_duration, "redraw": True},
+            {"args": [None, {"frame": {"duration": fr_duration, "redraw": False},
                               "fromcurrent": True, "transition": {"duration": 0}}],
              "label": "Play", "method": "animate"},
-            {"args": [[None], {"frame": {"duration": 0, "redraw": True},
+            {"args": [[None], {"frame": {"duration": 0, "redraw": False},
                                "mode": "immediate",
                                "transition": {"duration": 0}}],
              "label": "Pause", "method": "animate"}
@@ -171,7 +147,7 @@ def animate_play(games, tracking_df, play_df, players, gameId, playId, play_spee
     for x in [10, 110]:
         field_shapes.append(dict(type="line", x0=float(x), x1=float(x), y0=0, y1=53.3,
                                  line=dict(color="white", width=3), layer="below"))
-    # Endzones (home at x=0..10, visitor at x=110..120)
+    # Endzones
     home = selected_game_df['homeTeamAbbr'].iloc[0]
     visitor = selected_game_df['visitorTeamAbbr'].iloc[0]
     field_shapes.append(dict(type="rect", x0=0, x1=10, y0=0, y1=53.3,
@@ -179,10 +155,8 @@ def animate_play(games, tracking_df, play_df, players, gameId, playId, play_spee
     field_shapes.append(dict(type="rect", x0=110, x1=120, y0=0, y1=53.3,
                              line=dict(color="white", width=3), fillcolor=color_orders[visitor][0], layer="below"))
 
-    # Ensure consistent club order across frames
-    clubs = [c for c in selected_tracking_df['club'].dropna().unique()]
-
     frames = []
+    clubs = [c for c in selected_tracking_df['club'].dropna().unique()]
     for frameId in sorted_frame_list:
         data = []
 
@@ -208,46 +182,18 @@ def animate_play(games, tracking_df, play_df, players, gameId, playId, play_spee
         for team in clubs:
             plot_df = selected_tracking_df.loc[(selected_tracking_df['club']==team) & (selected_tracking_df['frameId']==frameId)].copy()
             if plot_df.empty:
-                # ensure a placeholder trace to preserve index alignment
-                if team != 'football':
-                    data.append(go.Scatter(x=[], y=[], mode='markers',
-                                             marker=dict(size=10), showlegend=False, hoverinfo='skip', name=str(team)))
-                else:
-                    data.append(go.Scatter(x=[], y=[], mode='markers',
-                                             marker=dict(size=7, symbol='diamond-wide'), showlegend=False, hoverinfo='skip', name='football'))
+                # placeholder to keep trace order
+                data.append(go.Scatter(x=[], y=[], mode='markers', marker=dict(size=10), showlegend=False, hoverinfo='skip', name=str(team)))
                 continue
 
             if team != 'football':
-                # Vectorized hover
                 mph = (plot_df['s'] * 2.23693629205).round(2).astype(str) + " MPH"
-                base_hover = "nflId:" + plot_df['nflId'].astype('Int64').astype(str) + "<br>" + \
-                             "displayName:" + plot_df['displayName'].astype(str) + "<br>" + \
-                             "Player Speed:" + mph
+                hover_text_array = ("nflId:" + plot_df['nflId'].astype('Int64').astype(str) +
+                                    "<br>displayName:" + plot_df['displayName'].astype(str) +
+                                    "<br>Player Speed:" + mph).tolist()
 
-                if (team == defensive_team) and (viz_type != 'original'):
-                    if viz_type == 'coverage' and 'pff_defensiveCoverageAssignment' in plot_df.columns:
-                        cov = plot_df['pff_defensiveCoverageAssignment'].fillna("")
-                    elif viz_type == 'man_zone' and 'pff_manZone' in plot_df.columns:
-                        cov = plot_df['pff_manZone'].fillna("")
-                    else:
-                        cov = ""
-                    hover_text_array = (base_hover + "<br>Coverage: " + cov.astype(str)).tolist()
-                else:
-                    hover_text_array = base_hover.tolist()
-
-                # Vectorized colors
-                if viz_type == 'original':
-                    club = plot_df['club'].iloc[0]
-                    marker_colors = [ColorPairs(club, club)[club][0] if club in colors else '#888888'] * len(plot_df)
-                elif viz_type == 'coverage' and 'pff_defensiveCoverageAssignment' in plot_df.columns:
-                    coverage_colors, _ = get_coverage_colors()
-                    marker_colors = plot_df['pff_defensiveCoverageAssignment'].map(coverage_colors).fillna("#808080").tolist()
-                elif viz_type == 'man_zone' and 'pff_manZone' in plot_df.columns:
-                    _, man_zone_colors = get_coverage_colors()
-                    marker_colors = plot_df['pff_manZone'].map(man_zone_colors).fillna("#808080").tolist()
-                else:
-                    club = plot_df['club'].iloc[0]
-                    marker_colors = [ColorPairs(club, club)[club][0] if club in colors else '#888888'] * len(plot_df)
+                club = plot_df['club'].iloc[0]
+                marker_colors = [colors.get(club, ['#888888'])[0]] * len(plot_df)
 
                 data.append(go.Scatter(
                     x=plot_df['x'], y=plot_df['y'], mode='markers',
@@ -264,14 +210,14 @@ def animate_play(games, tracking_df, play_df, players, gameId, playId, play_spee
                 ))
 
         slider_step = {'args': [[str(frameId)], {'frame': {'duration': 100, 'redraw': False},
-                                            'mode': 'immediate','transition': {'duration': 0}}],
+                                                 'mode': 'immediate','transition': {'duration': 0}}],
                        'label': str(frameId),'method': 'animate'}
         sliders_dict['steps'].append(slider_step)
         frames.append(go.Frame(data=data, name=str(frameId)))
 
     layout = go.Layout(
         autosize=True,
-        height=600,  # stable height; width stretches, aspect preserved
+        height=600,
         xaxis=dict(range=[0, 120], showgrid=False, showticklabels=False, zeroline=False, constrain='domain'),
         yaxis=dict(range=[0, 53.3], showgrid=False, showticklabels=False, zeroline=False,
                    scaleanchor='x', scaleratio=1, constrain='domain'),
@@ -300,19 +246,6 @@ def animate_play(games, tracking_df, play_df, players, gameId, playId, play_spee
 
     return fig
 
-def check_coverage_data(tracking_df, play_df, gameId, playId):
-    play_data = play_df.loc[(play_df['gameId']==gameId) & (play_df['playId']==playId)].copy()
-    if play_data.empty:
-        return "No play data.", []
-    defensive_team = play_data['defensiveTeam'].values[0]
-    defensive_players = tracking_df.loc[(tracking_df['gameId']==gameId) & (tracking_df['playId']==playId) & (tracking_df['club']==defensive_team)].copy()
-    info = []
-    info.append(f"Defensive players: {len(defensive_players['nflId'].dropna().unique())}")
-    cov_assign = defensive_players['pff_defensiveCoverageAssignment'].unique() if 'pff_defensiveCoverageAssignment' in defensive_players.columns else []
-    man_zone = defensive_players['pff_manZone'].unique() if 'pff_manZone' in defensive_players.columns else []
-    return None, [f"Coverage assignments present: {cov_assign}" if len(cov_assign) else "No coverage assignments column found.",
-                  f"Man/Zone present: {man_zone}" if len(man_zone) else "No man/zone column found."]
-
 # ------------------------------
 # Data loading (Parquet-backed, cached)
 # ------------------------------
@@ -333,7 +266,6 @@ def load_data(data_dir: Path):
         pq  = pq_dir / f"{name}.parquet"
         if pq.exists() and csv.exists() and pq.stat().st_mtime > csv.stat().st_mtime:
             return pd.read_parquet(pq)
-        # Fallback: if CSV missing but Parquet exists, read Parquet
         if not csv.exists() and pq.exists():
             return pd.read_parquet(pq)
         df = pd.read_csv(csv, dtype=CSV_DTYPES, low_memory=False)
@@ -347,8 +279,8 @@ def load_data(data_dir: Path):
     return games, plays, players, tracking
 
 @st.cache_data(show_spinner=False)
-def build_fig_cached(games, plays, players, tracking_df, gameId, playId, viz_type):
-    return animate_play(games, tracking_df, plays, players, gameId, playId, play_speed='regular', viz_type=viz_type)
+def build_fig_cached(games, plays, players, tracking_df, gameId, playId):
+    return animate_play(games, tracking_df, plays, players, gameId, playId, play_speed='regular')
 
 # ------------------------------
 # App UI
@@ -389,7 +321,7 @@ else:
     players = pd.read_csv(pl_file, dtype=CSV_DTYPES, low_memory=False)
     tracking_df = pd.read_csv(t_file, dtype=CSV_DTYPES, low_memory=False)
 
-# Normalize ID types to avoid mismatches
+# Normalize ID types
 for df in (games, plays, players, tracking_df):
     for col in ("gameId", "playId"):
         if col in df.columns:
@@ -405,12 +337,11 @@ if games_tracked.empty:
 
 def game_label_row(r):
     date = r.get("gameDate", "")
-    return f"{date}: {r['visitorTeamAbbr']} @ {r['homeTeamAbbr']} ({int(r['gameId'])})"
+    return f"{int(r['gameId'])} — {date} — {r['visitorTeamAbbr']} @ {r['homeTeamAbbr']}"
 
 games_tracked["label"] = games_tracked.apply(game_label_row, axis=1)
 labels_sorted = games_tracked["label"].sort_values().tolist()
 
-# Use preset game if present
 if preset_game and preset_game in games_tracked["gameId"].astype(int).tolist():
     idx = labels_sorted.index(games_tracked.loc[games_tracked["gameId"]==preset_game, "label"].iloc[0])
 else:
@@ -431,14 +362,13 @@ if game_plays.empty:
     st.stop()
 
 def short_desc(row):
-    d = f"{int(row.get('down',0))} & {int(row.get('yardsToGo',0))} — {row.get('gameClock','')}"
-    txt = str(row.get('playDescription',''))[:110].replace("\n"," asdfasdfa")
+    d = f"{int(row['playId'])} — {int(row.get('down',0))} & {int(row.get('yardsToGo',0))} — {row.get('gameClock','')}"
+    txt = str(row.get('playDescription',''))[:110].replace("\n"," ")
     return f"{d} — {txt}"
 
 game_plays["label"] = game_plays.apply(short_desc, axis=1)
 play_labels = game_plays["label"].tolist()
 
-# Use preset play if present
 if preset_play and preset_play in game_plays["playId"].astype(int).tolist():
     pidx = play_labels.index(game_plays.loc[game_plays["playId"]==preset_play, "label"].iloc[0])
 else:
@@ -448,13 +378,12 @@ play_label = st.sidebar.selectbox("Play", options=play_labels, index=pidx)
 playId = int(game_plays.loc[game_plays["label"] == play_label, "playId"].iloc[0])
 
 play_speed = st.sidebar.radio("Speed", ["fast","regular","slow"], index=1, horizontal=True)
-viz_type = st.sidebar.radio("Color mode", ["original","coverage","man_zone"], index=0, horizontal=False)
 
 # Reflect selection in URL
 st.query_params.update({"gameId": str(gameId), "playId": str(playId)})
 
-st.title("NFL Play Animation Viewer")
-st.caption("Pick a tracked game and play on the left, then render the Plotly animation below.")
+st.title("NFL Play Animation Viewer (no coverage)")
+st.caption("Pick a tracked game and play, then render the animation.")
 
 if st.sidebar.button("Render animation", type="primary"):
     # Description above chart
@@ -463,7 +392,7 @@ if st.sidebar.button("Render animation", type="primary"):
 
     try:
         with st.spinner("Building animation…"):
-            fig = build_fig_cached(games, plays, players, tracking_game, gameId, playId, viz_type)
+            fig = build_fig_cached(games, plays, players, tracking_game, gameId, playId)
 
         # Apply speed without rebuilding
         fr_duration = {"fast":65, "regular":100, "slow":135}[play_speed]
@@ -472,11 +401,6 @@ if st.sidebar.button("Render animation", type="primary"):
             btn.args[1]["frame"]["duration"] = fr_duration
 
         st.plotly_chart(fig, use_container_width=True, config={"displaylogo": False})
-
-        warn, lines = check_coverage_data(tracking_game, plays, gameId, playId)
-        with st.expander("Coverage data check"):
-            if warn: st.write(warn)
-            for ln in lines: st.write(ln)
     except Exception as e:
         st.exception(e)
 else:
