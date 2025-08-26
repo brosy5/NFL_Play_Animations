@@ -1,4 +1,3 @@
-
 # Play Animation Viewer (Streamlit) — optimized (redraw fix)
 # ----------------------------------------------------------
 # Implements: tracked-only dropdowns, true field aspect, field lines,
@@ -449,6 +448,7 @@ play_label = st.sidebar.selectbox("Play", options=play_labels, index=pidx)
 playId = int(game_plays.loc[game_plays["label"] == play_label, "playId"].iloc[0])
 
 play_speed = st.sidebar.radio("Speed", ["fast","regular","slow"], index=1, horizontal=True)
+viz_type = st.sidebar.radio("Color mode", ["original","coverage","man_zone"], index=0, horizontal=False)
 
 # Reflect selection in URL
 st.query_params.update({"gameId": str(gameId), "playId": str(playId)})
@@ -463,7 +463,7 @@ if st.sidebar.button("Render animation", type="primary"):
 
     try:
         with st.spinner("Building animation…"):
-            fig = build_fig_cached(games, plays, players, tracking_game, gameId, playId)
+            fig = build_fig_cached(games, plays, players, tracking_game, gameId, playId, viz_type)
 
         # Apply speed without rebuilding
         fr_duration = {"fast":65, "regular":100, "slow":135}[play_speed]
